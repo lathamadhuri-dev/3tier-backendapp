@@ -23,8 +23,12 @@ jobs:
       - name: Install dependencies
         run: npm ci --omit=dev
 
-      - name: Zip app package
-        run: zip -r backend-deploy.zip . --exclude "*.git*" --exclude "*.env*"
+      - name: Zip app package (exclude node_modules)
+        run: |
+          zip -r backend-deploy.zip . \
+            --exclude "*.git*" \
+            --exclude "*.env*" \
+            --exclude "node_modules/*"
 
       - name: Deploy to Azure App Service
         uses: azure/webapps-deploy@v2
@@ -33,13 +37,25 @@ jobs:
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: backend-deploy.zip
 
+      - name: Install dependencies on Azure
+        uses: azure/CLI@v1
+        with:
+          inlineScript: |
+            az webapp config appsettings set \
+              --resource-group RG-3tierapp \
+              --name ${{ secrets.AZURE_WEBAPP_NAME }} \
+              --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true
+
       - name: Enable WebSockets
         uses: azure/CLI@v1
         with:
           inlineScript: |
-            az webapp config set --resource-group RG-3tierapp --name ${{ secrets.AZURE_WEBAPP_NAME }} --web-sockets-enabled true
+            az webapp config set \
+              --resource-group RG-3tierapp \
+              --name ${{ secrets.AZURE_WEBAPP_NAME }} \
+              --web-sockets-enabled true
 
       - name: Health Check
         run: |
-          sleep 30
+          sleep 60
           curl --fail https://${{ secrets.AZURE_WEBAPP_NAME }}.azurewebsites.net/api/health || echo "Still starting..."
